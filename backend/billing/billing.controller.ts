@@ -4,9 +4,6 @@ import {
   Get,
   Body,
   UseGuards,
-  Headers,
-  RawBodyRequest,
-  Req,
 } from "@nestjs/common";
 import { StripeService } from "./stripe.service";
 import { AuthContextGuard } from "../context/auth-context.guard";
@@ -14,7 +11,6 @@ import { PermissionsGuard } from "../guards/permissions.guard";
 import { RequirePermission } from "../auth/permissions.decorator";
 import { AuthContext } from "../context/auth-context.decorator";
 import { AuthContextData } from "../context/auth-context.interface";
-import { Request } from "express";
 
 @Controller("billing")
 @UseGuards(AuthContextGuard, PermissionsGuard)
@@ -67,24 +63,5 @@ export class BillingController {
   async getStatus(@AuthContext() ctx: AuthContextData) {
     const status = await this.stripeService.getSubscriptionStatus(ctx.workspaceId);
     return status;
-  }
-
-  @Post("webhook")
-  async handleWebhook(
-    @Req() req: RawBodyRequest<Request>,
-    @Headers("stripe-signature") signature: string
-  ) {
-    if (!signature) {
-      throw new Error("Missing stripe-signature header");
-    }
-
-    const rawBody = req.rawBody;
-    if (!rawBody) {
-      throw new Error("Missing raw body");
-    }
-
-    await this.stripeService.handleWebhook(rawBody, signature);
-
-    return { received: true };
   }
 }
