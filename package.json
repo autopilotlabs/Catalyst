@@ -7,7 +7,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "postinstall": "prisma generate"
   },
   "keywords": [],
   "author": "",
@@ -43,10 +44,10 @@
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "tailwindcss-animate": "^1.0.7",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "prisma": "^7.0.1"
   },
   "devDependencies": {
-    "@types/pg": "^8.15.6",
-    "prisma": "^7.0.1"
+    "@types/pg": "^8.15.6"
   }
 }
