@@ -1,0 +1,353 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String           @id
+  email           String           @unique
+  firstName       String?
+  lastName        String?
+  imageUrl        String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  memories        AgentMemory[]
+  agentRuns       AgentRun[]
+  analyticsEvents AnalyticsEvent[]
+  auditLogs       AuditLog[]
+  eventTriggers   EventTrigger[]
+  plugins         Plugin[]
+  schedules       ScheduledRun[]
+  workflows       Workflow[]
+  workspaces      WorkspaceUser[]
+  settings        UserSettings?
+  apiKeys         UserApiKey[]
+}
+
+model Workspace {
+  id              String                 @id @default(uuid())
+  name            String
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  agentConfigs    AgentConfig[]
+  memories        AgentMemory[]
+  agentRuns       AgentRun[]
+  analyticsEvents AnalyticsEvent[]
+  auditLogs       AuditLog[]
+  dailyUsage      DailyUsage[]
+  eventTriggers   EventTrigger[]
+  plugins         Plugin[]
+  schedules       ScheduledRun[]
+  workflows       Workflow[]
+  subscription    WorkspaceSubscription?
+  users           WorkspaceUser[]
+}
+
+model WorkspaceUser {
+  id          String    @id @default(uuid())
+  role        String
+  userId      String
+  workspaceId String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([userId, workspaceId])
+}
+
+model AgentRun {
+  id          String          @id @default(cuid())
+  userId      String
+  workspaceId String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  input       Json
+  status      String          @default("pending")
+  output      String?
+  agentId     String?
+  messages    AgentMessage[]
+  agent       AgentConfig?    @relation(fields: [agentId], references: [id])
+  user        User            @relation(fields: [userId], references: [id])
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id])
+  state       AgentState?
+  steps       AgentStep[]
+  toolCalls   AgentToolCall[]
+}
+
+model AgentMessage {
+  id        String          @id @default(cuid())
+  runId     String
+  role      String
+  content   String
+  createdAt DateTime        @default(now())
+  run       AgentRun        @relation(fields: [runId], references: [id])
+  toolCalls AgentToolCall[]
+}
+
+model AgentToolCall {
+  id        String       @id @default(cuid())
+  runId     String
+  messageId String
+  toolName  String
+  arguments Json
+  result    Json?
+  error     String?
+  createdAt DateTime     @default(now())
+  message   AgentMessage @relation(fields: [messageId], references: [id])
+  run       AgentRun     @relation(fields: [runId], references: [id])
+}
+
+model AgentMemory {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  content     String
+  embedding   Float[]
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model AgentStep {
+  id         String   @id @default(cuid())
+  runId      String
+  stepNumber Int
+  type       String
+  action     String?
+  toolName   String?
+  arguments  Json?
+  result     Json?
+  createdAt  DateTime @default(now())
+  run        AgentRun @relation(fields: [runId], references: [id])
+
+  @@index([runId])
+}
+
+model AgentState {
+  id        String   @id @default(cuid())
+  runId     String   @unique
+  state     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  run       AgentRun @relation(fields: [runId], references: [id])
+}
+
+model AgentConfig {
+  id            String         @id @default(cuid())
+  workspaceId   String
+  name          String
+  description   String?
+  systemPrompt  String
+  maxSteps      Int            @default(8)
+  model         String         @default("gpt-4o-mini")
+  temperature   Float?         @default(0.7)
+  topP          Float?         @default(1.0)
+  tools         Json           @default("[]")
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id])
+  runs          AgentRun[]
+  eventTriggers EventTrigger[]
+  schedules     ScheduledRun[]
+}
+
+model ScheduledRun {
+  id          String      @id @default(cuid())
+  workspaceId String
+  userId      String
+  agentId     String
+  schedule    String
+  input       Json
+  enabled     Boolean     @default(true)
+  lastRunAt   DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  agent       AgentConfig @relation(fields: [agentId], references: [id])
+  user        User        @relation(fields: [userId], references: [id])
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([enabled])
+}
+
+model EventTrigger {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  userId        String
+  name          String
+  description   String?
+  eventType     String
+  filter        Json?
+  agentId       String
+  inputTemplate Json
+  enabled       Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  agent         AgentConfig @relation(fields: [agentId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([eventType])
+  @@index([enabled])
+}
+
+model Plugin {
+  id          String       @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  description String?
+  enabled     Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  user        User         @relation(fields: [userId], references: [id])
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  tools       PluginTool[]
+
+  @@index([workspaceId])
+  @@index([enabled])
+}
+
+model PluginTool {
+  id          String   @id @default(cuid())
+  pluginId    String
+  name        String
+  description String?
+  parameters  Json
+  code        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  plugin      Plugin   @relation(fields: [pluginId], references: [id], onDelete: Cascade)
+
+  @@unique([pluginId, name])
+  @@index([pluginId])
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  workspaceId String
+  userId      String
+  name        String
+  description String?
+  enabled     Boolean        @default(true)
+  triggerType String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  user        User           @relation(fields: [userId], references: [id])
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+  steps       WorkflowStep[]
+
+  @@index([workspaceId])
+  @@index([triggerType])
+  @@index([enabled])
+}
+
+model WorkflowStep {
+  id         String   @id @default(cuid())
+  workflowId String
+  type       String
+  config     Json
+  position   Json
+  order      Int
+  createdAt  DateTime @default(now())
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@index([workflowId])
+}
+
+model AnalyticsEvent {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  type        String
+  context     Json
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model DailyUsage {
+  id          String    @id @default(cuid())
+  workspaceId String
+  date        DateTime
+  runs        Int       @default(0)
+  workflows   Int       @default(0)
+  tokens      Int       @default(0)
+  cost        Float     @default(0)
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, date])
+  @@index([workspaceId])
+  @@index([date])
+}
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  action      String
+  entityType  String
+  entityId    String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  user        User?     @relation(fields: [userId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([entityType])
+  @@index([createdAt])
+}
+
+model WorkspaceSubscription {
+  id               String    @id @default(cuid())
+  workspaceId      String    @unique
+  stripeCustomerId String?
+  stripeSubId      String?
+  stripePriceId    String?
+  status           String    @default("inactive")
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  workspace        Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([status])
+}
+
+model UserSettings {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  theme         String   @default("light")
+  language      String   @default("en")
+  timezone      String   @default("UTC")
+  notifications Json     @default("{}")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  user          User     @relation(fields: [userId], references: [id])
+}
+
+model UserApiKey {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  hashedKey String
+  last4     String
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  revoked   Boolean   @default(false)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
