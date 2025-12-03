@@ -14,6 +14,7 @@ import { AuditService } from "../audit/audit.service";
 @Injectable()
 export class AgentExecutionService {
   private analyticsService: any = null;
+  private notificationsService: any = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -29,6 +30,7 @@ export class AgentExecutionService {
   ) {
     // Lazy load analytics service to avoid circular dependency
     this.initAnalyticsService();
+    this.initNotificationsService();
   }
 
   private async initAnalyticsService() {
@@ -38,6 +40,15 @@ export class AgentExecutionService {
       this.analyticsService = AnalyticsService;
     } catch (error) {
       // Analytics not available yet
+    }
+  }
+
+  private async initNotificationsService() {
+    try {
+      const { NotificationsService } = await import("../notifications/notifications.service");
+      this.notificationsService = NotificationsService;
+    } catch (error) {
+      // Notifications not available yet
     }
   }
 
@@ -331,6 +342,9 @@ export class AgentExecutionService {
         data: { status: "error" },
       });
 
+      // Send failure notification
+      await this.sendFailureNotification(ctx, run.id, error.message);
+
       throw error;
     }
   }
@@ -596,7 +610,42 @@ export class AgentExecutionService {
         data: { status: "error", output: error.message },
       });
 
+      // Send failure notification
+      await this.sendFailureNotification(ctx, runId, error.message);
+
       throw error;
+    }
+  }
+
+  private async sendFailureNotification(
+    ctx: AuthContextData,
+    runId: string,
+    errorMessage: string
+  ): Promise<void> {
+    try {
+      if (!this.notificationsService) {
+        await this.initNotificationsService();
+      }
+
+      if (this.notificationsService) {
+        const notificationsService = new this.notificationsService(
+          this.prisma,
+          this.auditService
+        );
+        await notificationsService.sendToWorkspace(
+          ctx.workspaceId,
+          "agent.run.failed",
+          "Agent Run Failed",
+          `Agent run ${runId} failed with error: ${errorMessage}`,
+          {
+            runId,
+            error: errorMessage,
+            userId: ctx.userId,
+          }
+        );
+      }
+    } catch (error) {
+      // Silently fail notification sending
     }
   }
 

@@ -57,7 +57,7 @@ export async function GET() {
       lastName: user.lastName,
       imageUrl: user.imageUrl,
     },
-    workspaces: user.workspaces.map((wu) => ({
+    workspaces: user.workspaces.map((wu: any) => ({
       id: wu.workspace.id,
       name: wu.workspace.name,
       role: wu.role,

@@ -7,43 +7,47 @@ datasource db {
 }
 
 model User {
-  id              String           @id
-  email           String           @unique
-  firstName       String?
-  lastName        String?
-  imageUrl        String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  memories        AgentMemory[]
-  agentRuns       AgentRun[]
-  analyticsEvents AnalyticsEvent[]
-  auditLogs       AuditLog[]
-  eventTriggers   EventTrigger[]
-  plugins         Plugin[]
-  schedules       ScheduledRun[]
-  workflows       Workflow[]
-  workspaces      WorkspaceUser[]
-  settings        UserSettings?
-  apiKeys         UserApiKey[]
+  id                       String                     @id
+  email                    String                     @unique
+  firstName                String?
+  lastName                 String?
+  imageUrl                 String?
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  memories                 AgentMemory[]
+  agentRuns                AgentRun[]
+  analyticsEvents          AnalyticsEvent[]
+  auditLogs                AuditLog[]
+  eventTriggers            EventTrigger[]
+  plugins                  Plugin[]
+  schedules                ScheduledRun[]
+  workflows                Workflow[]
+  workspaces               WorkspaceUser[]
+  settings                 UserSettings?
+  apiKeys                  UserApiKey[]
+  notifications            Notification[]
+  notificationSettings     UserNotificationSettings?
 }
 
 model Workspace {
-  id              String                 @id @default(uuid())
-  name            String
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  agentConfigs    AgentConfig[]
-  memories        AgentMemory[]
-  agentRuns       AgentRun[]
-  analyticsEvents AnalyticsEvent[]
-  auditLogs       AuditLog[]
-  dailyUsage      DailyUsage[]
-  eventTriggers   EventTrigger[]
-  plugins         Plugin[]
-  schedules       ScheduledRun[]
-  workflows       Workflow[]
-  subscription    WorkspaceSubscription?
-  users           WorkspaceUser[]
+  id                   String                     @id @default(uuid())
+  name                 String
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  agentConfigs         AgentConfig[]
+  memories             AgentMemory[]
+  agentRuns            AgentRun[]
+  analyticsEvents      AnalyticsEvent[]
+  auditLogs            AuditLog[]
+  dailyUsage           DailyUsage[]
+  eventTriggers        EventTrigger[]
+  plugins              Plugin[]
+  schedules            ScheduledRun[]
+  workflows            Workflow[]
+  subscription         WorkspaceSubscription?
+  users                WorkspaceUser[]
+  notifications        Notification[]
+  notificationSettings UserNotificationSettings[]
 }
 
 model WorkspaceUser {
@@ -350,4 +354,39 @@ model UserApiKey {
   user      User      @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  type        String
+  channel     String
+  title       String
+  message     String
+  data        Json
+  read        Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+
+  @@index([workspaceId])
+  @@index([userId])
+  @@index([read])
+}
+
+model UserNotificationSettings {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  workspaceId    String
+  emailEnabled   Boolean   @default(true)
+  inAppEnabled   Boolean   @default(true)
+  webhookUrl     String?
+  webhookEnabled Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id])
+  workspace      Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
 }

@@ -14,6 +14,7 @@ import { BillingModule } from './billing/billing.module';
 import { WorkspaceModule } from './workspace/workspace.module';
 import { SearchModule } from './search/search.module';
 import { UserModule } from './user/user.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { EventBusService } from './events/event-bus.service';
 import { EventTriggerService } from './events/event-trigger.service';
 
@@ -32,6 +33,7 @@ import { EventTriggerService } from './events/event-trigger.service';
     WorkspaceModule,
     SearchModule,
     UserModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

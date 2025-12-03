@@ -28,6 +28,7 @@ export class WorkflowExecutionService {
   private readonly MAX_EXECUTION_TIME = 2 * 60 * 1000; // 2 minutes
   private readonly MAX_DELAY = 5 * 60 * 1000; // 5 minutes
   private analyticsService: any = null;
+  private notificationsService: any = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -36,6 +37,7 @@ export class WorkflowExecutionService {
     private readonly searchIndex: SearchIndexService
   ) {
     this.initAnalyticsService();
+    this.initNotificationsService();
   }
 
   async indexWorkflow(workflow: any) {
@@ -59,14 +61,24 @@ export class WorkflowExecutionService {
     }
   }
 
+  private async initNotificationsService() {
+    try {
+      const { NotificationsService } = await import("../notifications/notifications.service");
+      this.notificationsService = NotificationsService;
+    } catch (error) {
+      // Notifications not available yet
+    }
+  }
+
   async executeWorkflow(workflowId: string, eventData: any) {
     this.logger.log(`Executing workflow: ${workflowId}`);
 
     const startTime = Date.now();
+    let workflow: any = null;
 
     try {
       // Load workflow with steps (enforce workspace isolation)
-      const workflow = await this.prisma.workflow.findFirst({
+      workflow = await this.prisma.workflow.findFirst({
         where: {
           id: workflowId,
           enabled: true,
@@ -174,6 +186,13 @@ export class WorkflowExecutionService {
         },
       });
 
+      // Send completion notification
+      await this.sendCompletionNotification(
+        workflow.workspaceId,
+        workflow.name,
+        executedSteps.size
+      );
+
       return {
         success: true,
         stepsExecuted: executedSteps.size,
@@ -184,6 +203,14 @@ export class WorkflowExecutionService {
         `Workflow ${workflowId} execution failed: ${error.message}`,
         error.stack
       );
+
+      // Send failure notification
+      await this.sendFailureNotification(
+        workflow?.workspaceId,
+        workflow?.name || workflowId,
+        error.message
+      );
+
       throw error;
     }
   }
@@ -415,5 +442,69 @@ export class WorkflowExecutionService {
       ...replaceVariables(merged),
       event: variables,
     };
+  }
+
+  private async sendCompletionNotification(
+    workspaceId: string,
+    workflowName: string,
+    stepsCount: number
+  ): Promise<void> {
+    try {
+      if (!this.notificationsService) {
+        await this.initNotificationsService();
+      }
+
+      if (this.notificationsService) {
+        const notificationsService = new this.notificationsService(
+          this.prisma,
+          this.auditService
+        );
+        await notificationsService.sendToWorkspace(
+          workspaceId,
+          "workflow.completed",
+          "Workflow Completed",
+          `Workflow "${workflowName}" completed successfully with ${stepsCount} steps executed.`,
+          {
+            workflowName,
+            stepsCount,
+          }
+        );
+      }
+    } catch (error) {
+      // Silently fail notification sending
+      this.logger.warn(`Failed to send workflow completion notification: ${error}`);
+    }
+  }
+
+  private async sendFailureNotification(
+    workspaceId: string,
+    workflowName: string,
+    errorMessage: string
+  ): Promise<void> {
+    try {
+      if (!this.notificationsService) {
+        await this.initNotificationsService();
+      }
+
+      if (this.notificationsService) {
+        const notificationsService = new this.notificationsService(
+          this.prisma,
+          this.auditService
+        );
+        await notificationsService.sendToWorkspace(
+          workspaceId,
+          "workflow.failed",
+          "Workflow Failed",
+          `Workflow "${workflowName}" failed with error: ${errorMessage}`,
+          {
+            workflowName,
+            error: errorMessage,
+          }
+        );
+      }
+    } catch (error) {
+      // Silently fail notification sending
+      this.logger.warn(`Failed to send workflow failure notification: ${error}`);
+    }
   }
 }

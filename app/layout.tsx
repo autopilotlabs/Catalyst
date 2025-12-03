@@ -10,6 +10,7 @@ import {
 import "./globals.css";
 import { WorkspaceSelector } from "@/components/workspace-selector";
 import { SearchCommandPalette } from "@/components/search/SearchCommandPalette";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export const metadata: Metadata = {
   title: "Catalyst",
@@ -38,6 +39,7 @@ export default function RootLayout({
             <SignedIn>
               <div className="flex items-center gap-4">
                 <WorkspaceSelector />
+                <NotificationBell />
                 <UserButton />
               </div>
             </SignedIn>

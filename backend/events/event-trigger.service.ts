@@ -11,6 +11,7 @@ export class EventTriggerService {
   private readonly logger = new Logger(EventTriggerService.name);
   private workflowExecutionService: any = null;
   private analyticsService: any = null;
+  private notificationsService: any = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -21,6 +22,7 @@ export class EventTriggerService {
     // Lazy load services to avoid circular dependency
     this.initWorkflowService();
     this.initAnalyticsService();
+    this.initNotificationsService();
   }
 
   private async initWorkflowService() {
@@ -41,6 +43,15 @@ export class EventTriggerService {
       this.analyticsService = AnalyticsService;
     } catch (error) {
       // Analytics not available yet
+    }
+  }
+
+  private async initNotificationsService() {
+    try {
+      const { NotificationsService } = await import("../notifications/notifications.service");
+      this.notificationsService = NotificationsService;
+    } catch (error) {
+      // Notifications not available yet
     }
   }
 
@@ -233,6 +244,14 @@ export class EventTriggerService {
         `Failed to execute trigger ${trigger.id}: ${error.message}`,
         error.stack
       );
+      
+      // Send failure notification
+      await this.sendTriggerFailureNotification(
+        trigger.workspaceId,
+        trigger.name,
+        error.message
+      );
+      
       throw error;
     }
   }
@@ -282,5 +301,67 @@ export class EventTriggerService {
       ...template,
       event: eventData,
     };
+  }
+
+  private async sendTriggerFailureNotification(
+    workspaceId: string,
+    triggerName: string,
+    errorMessage: string
+  ): Promise<void> {
+    try {
+      if (!this.notificationsService) {
+        await this.initNotificationsService();
+      }
+
+      if (this.notificationsService) {
+        const notificationsService = new this.notificationsService(
+          this.prisma,
+          this.auditService
+        );
+        await notificationsService.sendToWorkspace(
+          workspaceId,
+          "event.trigger.failed",
+          "Event Trigger Failed",
+          `Event trigger "${triggerName}" failed with error: ${errorMessage}`,
+          {
+            triggerName,
+            error: errorMessage,
+          }
+        );
+      }
+    } catch (error) {
+      // Silently fail notification sending
+    }
+  }
+
+  private async sendFilterMismatchNotification(
+    workspaceId: string,
+    triggerName: string,
+    eventType: string
+  ): Promise<void> {
+    try {
+      if (!this.notificationsService) {
+        await this.initNotificationsService();
+      }
+
+      if (this.notificationsService) {
+        const notificationsService = new this.notificationsService(
+          this.prisma,
+          this.auditService
+        );
+        await notificationsService.sendToWorkspace(
+          workspaceId,
+          "event.filter.blocked",
+          "Event Blocked by Filter",
+          `Event "${eventType}" was blocked by filter for trigger "${triggerName}".`,
+          {
+            triggerName,
+            eventType,
+          }
+        );
+      }
+    } catch (error) {
+      // Silently fail notification sending
+    }
   }
 }
