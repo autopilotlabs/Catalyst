@@ -61,7 +61,7 @@ export async function getAuthContext(): Promise<AuthContext> {
   if (workspaceCookie) {
     // Check if user belongs to the workspace in cookie
     const cookieWorkspace = user.workspaces.find(
-      (w) => w.workspaceId === workspaceCookie
+      (w: any) => w.workspaceId === workspaceCookie
     );
     if (cookieWorkspace) {
       activeWorkspaceId = workspaceCookie;
@@ -76,7 +76,7 @@ export async function getAuthContext(): Promise<AuthContext> {
 
   // Step 7: Verify membership
   const membership = user.workspaces.find(
-    (w) => w.workspaceId === activeWorkspaceId
+    (w: any) => w.workspaceId === activeWorkspaceId
   );
 
   if (!membership) {
