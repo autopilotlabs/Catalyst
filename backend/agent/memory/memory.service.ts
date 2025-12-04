@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Inject, forwardRef } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { OpenAIService } from "../../openai/openai.service";
 import { SearchIndexService } from "../../search/search-index.service";
@@ -11,7 +11,9 @@ export class MemoryService {
     private readonly prisma: PrismaService,
     private readonly openaiService: OpenAIService,
     private readonly auditService: AuditService,
-    private readonly searchIndex: SearchIndexService
+    private readonly searchIndex: SearchIndexService,
+    @Inject(forwardRef(() => require('../../observability/observability.service').ObservabilityService))
+    private readonly observability: any
   ) {}
 
   async embed(text: string): Promise<number[]> {
@@ -24,6 +26,7 @@ export class MemoryService {
   }
 
   async storeMemory(ctx: AuthContextData, content: string) {
+    const startTime = Date.now();
     const embedding = await this.embed(content);
     const memory = await this.prisma.agentMemory.create({
       data: {
@@ -47,11 +50,25 @@ export class MemoryService {
       },
     });
 
+    // Log observability event
+    const duration = Date.now() - startTime;
+    if (this.observability?.logEvent) {
+      await this.observability.logEvent(ctx, {
+        category: "memory",
+        eventType: "memory.store",
+        entityId: memory.id,
+        entityType: "memory",
+        durationMs: duration,
+        success: true,
+      });
+    }
+
     return memory;
   }
 
   async searchMemory(ctx: AuthContextData, query: string, limit = 5) {
     try {
+      const startTime = Date.now();
       const embedding = await this.embed(query);
       const embeddingArray = `[${embedding.join(",")}]`;
       
@@ -74,6 +91,18 @@ export class MemoryService {
         },
       });
 
+      // Log observability event
+      const duration = Date.now() - startTime;
+      if (this.observability?.logEvent) {
+        await this.observability.logEvent(ctx, {
+          category: "memory",
+          eventType: "memory.search",
+          durationMs: duration,
+          success: true,
+          metadata: { resultsCount: results.length },
+        });
+      }
+
       return results;
     } catch (error) {
       // Fallback to recent memories if vector search fails
@@ -89,5 +118,14 @@ export class MemoryService {
       orderBy: { createdAt: "desc" },
       take: limit,
     });
+  }
+
+  /**
+   * Run job handler for background queue - embedding generation
+   */
+  async runEmbeddingJob(job: any, payload: any): Promise<void> {
+    // Stub for future async embedding if needed
+    // Currently embeddings are generated synchronously in storeMemory
+    return Promise.resolve();
   }
 }

@@ -69,4 +69,25 @@ export class UserSettingsController {
     );
     return { data: result };
   }
+
+  // ========== DEFAULT WORKSPACE ==========
+
+  @Get("settings/workspace")
+  async getDefaultWorkspace(@AuthContext() ctx: AuthContextData) {
+    const result = await this.userSettingsService.getDefaultWorkspace(ctx.userId);
+    return { data: result };
+  }
+
+  @Patch("settings/workspace")
+  async setDefaultWorkspace(
+    @AuthContext() ctx: AuthContextData,
+    @Body() body: { workspaceId: string }
+  ) {
+    const result = await this.userSettingsService.setDefaultWorkspace(
+      ctx.userId,
+      body.workspaceId,
+      ctx
+    );
+    return { data: result };
+  }
 }

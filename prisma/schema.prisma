@@ -27,6 +27,12 @@ model User {
   apiKeys                  UserApiKey[]
   notifications            Notification[]
   notificationSettings     UserNotificationSettings?
+  agentVersionsCreated     AgentVersion[]             @relation("AgentVersionCreatedBy")
+  agentDeploymentsCreated  AgentDeployment[]          @relation("AgentDeploymentCreatedBy")
+  modelVersionsCreated     ModelVersion[]             @relation("ModelVersionCreatedBy")
+  modelDeploymentsCreated  ModelDeployment[]          @relation("ModelDeploymentCreatedBy")
+  modelsCreated            Model[]                    @relation("ModelCreatedBy")
+  filesCreated             FileStorage[]              @relation("FileCreatedBy")
 }
 
 model Workspace {
@@ -48,6 +54,31 @@ model Workspace {
   users                WorkspaceUser[]
   notifications        Notification[]
   notificationSettings UserNotificationSettings[]
+  rateLimitCounters    RateLimitCounter[]
+  apiKeys              ApiKey[]
+  jobs                 Job[]
+  modelInvocations     ModelInvocation[]
+  evalSuites           EvalSuite[]
+  evalTests            EvalTest[]
+  evalRuns             EvalRun[]
+  evalResults          EvalResult[]
+  evalBaselines        EvalBaseline[]
+  billingCycles        BillingCycle[]
+  billingUsage         BillingUsage[]
+  invoices             Invoice[]
+  limits               WorkspaceLimit?
+  exportRequests       ExportRequest[]
+  importRequests       ImportRequest[]
+  observabilityEvents  ObservabilityEvent[]
+  userSettings         UserSettings[]
+  envVars              WorkspaceEnvVar[]
+  agentVersions        AgentVersion[]
+  agentDeployments     AgentDeployment[]
+  models               Model[]
+  modelVersions        ModelVersion[]
+  modelDeployments     ModelDeployment[]
+  fileStorage          FileStorage[]
+  fileRefs             FileRef[]
 }
 
 model WorkspaceUser {
@@ -143,22 +174,24 @@ model AgentState {
 }
 
 model AgentConfig {
-  id            String         @id @default(cuid())
+  id            String            @id @default(cuid())
   workspaceId   String
   name          String
   description   String?
   systemPrompt  String
-  maxSteps      Int            @default(8)
-  model         String         @default("gpt-4o-mini")
-  temperature   Float?         @default(0.7)
-  topP          Float?         @default(1.0)
-  tools         Json           @default("[]")
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  workspace     Workspace      @relation(fields: [workspaceId], references: [id])
+  maxSteps      Int               @default(8)
+  model         String            @default("gpt-4o-mini")
+  temperature   Float?            @default(0.7)
+  topP          Float?            @default(1.0)
+  tools         Json              @default("[]")
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id])
   runs          AgentRun[]
   eventTriggers EventTrigger[]
   schedules     ScheduledRun[]
+  versions      AgentVersion[]
+  deployments   AgentDeployment[]
 }
 
 model ScheduledRun {
@@ -331,15 +364,17 @@ model WorkspaceSubscription {
 }
 
 model UserSettings {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  theme         String   @default("light")
-  language      String   @default("en")
-  timezone      String   @default("UTC")
-  notifications Json     @default("{}")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  user          User     @relation(fields: [userId], references: [id])
+  id                 String     @id @default(cuid())
+  userId             String     @unique
+  theme              String     @default("light")
+  language           String     @default("en")
+  timezone           String     @default("UTC")
+  notifications      Json       @default("{}")
+  defaultWorkspaceId String?
+  defaultWorkspace   Workspace? @relation(fields: [defaultWorkspaceId], references: [id])
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  user               User       @relation(fields: [userId], references: [id])
 }
 
 model UserApiKey {
@@ -389,4 +424,449 @@ model UserNotificationSettings {
   workspace      Workspace @relation(fields: [workspaceId], references: [id])
 
   @@index([workspaceId])
+}
+
+model RateLimitCounter {
+  id          String    @id @default(cuid())
+  workspaceId String
+  key         String
+  count       Int       @default(0)
+  periodStart DateTime
+  periodEnd   DateTime
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, key, periodStart])
+  @@index([workspaceId, key])
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  keyHash     String
+  role        String
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([workspaceId, role])
+  @@index([revokedAt])
+}
+
+model Job {
+  id          String     @id @default(cuid())
+  workspaceId String?
+  type        String
+  payload     Json
+  status      String     @default("pending")
+  attempts    Int        @default(0)
+  maxAttempts Int        @default(5)
+  scheduledAt DateTime   @default(now())
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  lastError   String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+  @@index([status])
+  @@index([type])
+  @@index([scheduledAt])
+}
+
+model ModelInvocation {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  model        String
+  provider     String
+  status       String
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  totalTokens  Int       @default(0)
+  cost         Float     @default(0)
+  error        String?
+  createdAt    DateTime  @default(now())
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+  @@index([workspaceId, model])
+}
+
+model EvalSuite {
+  id          String         @id @default(cuid())
+  workspaceId String
+  name        String
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tests       EvalTest[]
+  runs        EvalRun[]
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id])
+  baselines   EvalBaseline[]
+
+  @@index([workspaceId])
+}
+
+model EvalTest {
+  id          String       @id @default(cuid())
+  workspaceId String
+  suiteId     String
+  name        String
+  input       Json
+  expected    Json?
+  createdAt   DateTime     @default(now())
+  suite       EvalSuite    @relation(fields: [suiteId], references: [id])
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id])
+  results     EvalResult[]
+
+  @@index([workspaceId, suiteId])
+}
+
+model EvalRun {
+  id              String       @id @default(cuid())
+  workspaceId     String
+  suiteId         String
+  modelId         String
+  status          String
+  totalTests      Int          @default(0)
+  passedTests     Int          @default(0)
+  failedTests     Int          @default(0)
+  createdAt       DateTime     @default(now())
+  completedAt     DateTime?
+  baselineRunId   String?
+  regression      Boolean      @default(false)
+  regressionDelta Float?
+  suite           EvalSuite    @relation(fields: [suiteId], references: [id])
+  results         EvalResult[]
+  workspace       Workspace    @relation(fields: [workspaceId], references: [id])
+  baselines       EvalBaseline[]
+
+  @@index([workspaceId, suiteId, createdAt])
+}
+
+model EvalResult {
+  id         String    @id @default(cuid())
+  workspaceId String
+  runId      String
+  testId     String
+  actual     Json
+  expected   Json?
+  passed     Boolean
+  error      String?
+  durationMs Int       @default(0)
+  run        EvalRun   @relation(fields: [runId], references: [id])
+  test       EvalTest  @relation(fields: [testId], references: [id])
+  workspace  Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, runId])
+}
+
+model EvalBaseline {
+  id          String    @id @default(cuid())
+  workspaceId String
+  suiteId     String
+  modelId     String
+  runId       String
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  suite       EvalSuite @relation(fields: [suiteId], references: [id])
+  run         EvalRun   @relation(fields: [runId], references: [id])
+
+  @@unique([workspaceId, suiteId, modelId])
+  @@index([workspaceId, suiteId])
+}
+
+model BillingCycle {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  periodStart  DateTime
+  periodEnd    DateTime
+  totalCost    Float          @default(0)
+  closed       Boolean        @default(false)
+  createdAt    DateTime       @default(now())
+  usageEntries BillingUsage[]
+  invoices     Invoice[]
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, periodStart])
+}
+
+model BillingUsage {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  billingCycleId String?
+  category       String
+  units          Int           @default(0)
+  cost           Float         @default(0)
+  metadata       Json?
+  createdAt      DateTime      @default(now())
+  workspace      Workspace     @relation(fields: [workspaceId], references: [id])
+  billingCycle   BillingCycle? @relation(fields: [billingCycleId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model Invoice {
+  id             String       @id @default(cuid())
+  workspaceId    String
+  billingCycleId String
+  amount         Float
+  pdfUrl         String?
+  createdAt      DateTime     @default(now())
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id])
+  billingCycle   BillingCycle @relation(fields: [billingCycleId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model WorkspaceLimit {
+  id                  String    @id @default(cuid())
+  workspaceId         String    @unique
+  planTier            String    @default("starter")
+  maxAgents           Int       @default(5)
+  maxWorkflows        Int       @default(10)
+  maxTriggers         Int       @default(20)
+  maxMemoryMB         Int       @default(100)
+  maxApiKeys          Int       @default(5)
+  maxMonthlyTokens    Int       @default(1000000)
+  softTokenThreshold  Float     @default(0.8)
+  hardTokenThreshold  Float     @default(1.0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+  workspace           Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId])
+}
+
+model ExportRequest {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  type        String
+  format      String
+  status      String    @default("pending")
+  filePath    String?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model ImportRequest {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String?
+  type        String
+  format      String
+  status      String    @default("pending")
+  filePath    String?
+  totalRows   Int?
+  successRows Int?
+  errorRows   Int?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, createdAt])
+}
+
+model WorkspaceClone {
+  id                String   @id @default(cuid())
+  sourceWorkspaceId String
+  targetWorkspaceId String?
+  userId            String?
+  status            String   // "pending" | "running" | "success" | "error"
+  includeMembers    Boolean
+  error             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([sourceWorkspaceId, createdAt])
+  @@index([userId])
+}
+
+model ObservabilityEvent {
+  id          String    @id @default(cuid())
+  workspaceId String
+  timestamp   DateTime  @default(now())
+  category    String    // "model", "agent", "workflow", "trigger", "memory", "job", "external", "billing", "eval"
+  eventType   String    // "model.invoke", "agent.run.started", ...
+  entityId    String?   // agentId, workflowId, apiKeyId, etc
+  entityType  String?   // "agent", "workflow", "trigger", "apiKey"
+  durationMs  Int?
+  success     Boolean?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@index([workspaceId, timestamp])
+  @@index([workspaceId, category, timestamp])
+}
+
+model ObservabilityMetric {
+  id          String   @id @default(cuid())
+  workspaceId String
+  category    String   // "model.tokens", "agent.runs", ...
+  periodStart DateTime
+  periodEnd   DateTime
+  value       Float
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@index([workspaceId, category, periodStart])
+}
+
+model WorkspaceEnvVar {
+  id          String    @id @default(cuid())
+  workspaceId String
+  name        String
+  valueEnc    Bytes     // encrypted value
+  version     Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, name])
+}
+
+model AgentVersion {
+  id           String            @id @default(cuid())
+  workspaceId  String
+  agentId      String
+  version      Int
+  label        String?
+  config       Json              // full snapshot of agent config at this version
+  createdAt    DateTime          @default(now())
+  createdById  String?
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id])
+  agent        AgentConfig       @relation(fields: [agentId], references: [id])
+  createdBy    User?             @relation("AgentVersionCreatedBy", fields: [createdById], references: [id])
+  deployments  AgentDeployment[]
+
+  @@unique([agentId, version])
+  @@index([workspaceId, agentId])
+}
+
+model AgentDeployment {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  agentId      String
+  versionId    String
+  environment  String       // "dev", "staging", "prod"
+  alias        String?      // optional user-facing alias
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdById  String?
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id])
+  agent        AgentConfig  @relation(fields: [agentId], references: [id])
+  version      AgentVersion @relation(fields: [versionId], references: [id])
+  createdBy    User?        @relation("AgentDeploymentCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([workspaceId, environment, agentId])
+  @@index([workspaceId, agentId])
+}
+
+model Model {
+  id            String            @id @default(cuid())
+  workspaceId   String
+  name          String
+  provider      String            // "openai", "anthropic", etc.
+  modelName     String            // actual model ID (e.g., "gpt-4o-mini")
+  maxTokens     Int               @default(4096)
+  temperature   Float?            @default(0.7)
+  topP          Float?            @default(1.0)
+  headers       Json?             // optional custom headers
+  apiKeyRefs    Json?             // references to environment variables for API keys
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  createdById   String?
+
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id])
+  createdBy     User?             @relation("ModelCreatedBy", fields: [createdById], references: [id])
+  versions      ModelVersion[]
+  deployments   ModelDeployment[]
+
+  @@index([workspaceId])
+}
+
+model ModelVersion {
+  id           String            @id @default(cuid())
+  workspaceId  String
+  modelId      String
+  version      Int
+  label        String?
+  config       Json              // immutable snapshot of model configuration
+  createdAt    DateTime          @default(now())
+  createdById  String?
+
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id])
+  model        Model             @relation(fields: [modelId], references: [id])
+  createdBy    User?             @relation("ModelVersionCreatedBy", fields: [createdById], references: [id])
+  deployments  ModelDeployment[]
+
+  @@unique([modelId, version])
+  @@index([workspaceId, modelId])
+}
+
+model ModelDeployment {
+  id           String       @id @default(cuid())
+  workspaceId  String
+  modelId      String
+  versionId    String
+  environment  String       // "dev", "staging", "prod"
+  alias        String?
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  createdById  String?
+
+  workspace    Workspace    @relation(fields: [workspaceId], references: [id])
+  model        Model        @relation(fields: [modelId], references: [id])
+  version      ModelVersion @relation(fields: [versionId], references: [id])
+  createdBy    User?        @relation("ModelDeploymentCreatedBy", fields: [createdById], references: [id])
+
+  @@unique([workspaceId, environment, modelId])
+  @@index([workspaceId, modelId])
+}
+
+model FileStorage {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  name         String
+  size         Int
+  mimeType     String
+  path         String
+  createdAt    DateTime  @default(now())
+  createdById  String?
+  metadata     Json?
+
+  workspace    Workspace @relation(fields: [workspaceId], references: [id])
+  createdBy    User?     @relation("FileCreatedBy", fields: [createdById], references: [id])
+  refs         FileRef[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model FileRef {
+  id           String      @id @default(cuid())
+  workspaceId  String
+  fileId       String
+  entityType   String      // "agent", "workflow", "memory", "eval", "trigger", "custom"
+  entityId     String?
+  createdAt    DateTime    @default(now())
+
+  workspace    Workspace   @relation(fields: [workspaceId], references: [id])
+  file         FileStorage @relation(fields: [fileId], references: [id])
+
+  @@index([workspaceId, entityType, entityId])
+  @@index([fileId])
 }

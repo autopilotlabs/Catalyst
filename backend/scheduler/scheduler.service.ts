@@ -97,7 +97,9 @@ export class SchedulerService {
       const ctx: AuthContextData = {
         userId: sched.userId,
         workspaceId: sched.workspaceId,
-        role: "owner", // System runs always as owner
+        membership: {
+          role: "owner", // System runs always as owner
+        },
       };
 
       this.logger.log(

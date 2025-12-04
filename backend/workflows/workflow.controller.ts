@@ -12,12 +12,16 @@ import { PrismaService } from "../prisma/prisma.service";
 import { WorkflowExecutionService } from "./workflow-execution.service";
 import { AuthContextGuard } from "../context/auth-context.guard";
 import { PermissionsGuard } from "../guards/permissions.guard";
+import { RateLimitGuard } from "../guards/rate-limit.guard";
+import { WorkspaceLimitGuard, CheckLimit } from "../guards/workspace-limit.guard";
 import { RequirePermission } from "../auth/permissions.decorator";
+import { RateLimit } from "../rate-limit/rate-limit.decorator";
+import { RATE_KEY_WORKFLOW_RUN } from "../rate-limit/rate-limit.service";
 import { AuthContext } from "../context/auth-context.decorator";
 import { AuthContextData } from "../context/auth-context.interface";
 
 @Controller("workflows")
-@UseGuards(AuthContextGuard, PermissionsGuard)
+@UseGuards(AuthContextGuard, PermissionsGuard, RateLimitGuard, WorkspaceLimitGuard)
 export class WorkflowController {
   constructor(
     private readonly prisma: PrismaService,
@@ -44,6 +48,7 @@ export class WorkflowController {
 
   @Post()
   @RequirePermission("workspace.workflows")
+  @CheckLimit("workflows")
   async createWorkflow(
     @AuthContext() ctx: AuthContextData,
     @Body() body: any

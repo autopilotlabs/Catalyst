@@ -341,4 +341,106 @@ export class UserSettingsService {
 
     return keyRecord.userId;
   }
+
+  /**
+   * Get default workspace for a user
+   */
+  async getDefaultWorkspace(userId: string) {
+    const settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+      include: {
+        defaultWorkspace: true,
+      },
+    });
+
+    if (!settings || !settings.defaultWorkspaceId) {
+      return {
+        defaultWorkspaceId: null,
+        workspace: null,
+      };
+    }
+
+    return {
+      defaultWorkspaceId: settings.defaultWorkspaceId,
+      workspace: settings.defaultWorkspace
+        ? {
+            id: settings.defaultWorkspace.id,
+            name: settings.defaultWorkspace.name,
+          }
+        : null,
+    };
+  }
+
+  /**
+   * Set default workspace for a user
+   */
+  async setDefaultWorkspace(
+    userId: string,
+    workspaceId: string,
+    ctx: AuthContextData
+  ) {
+    // Validate that user is a member of the workspace
+    const membership = await this.prisma.workspaceUser.findUnique({
+      where: {
+        userId_workspaceId: {
+          userId,
+          workspaceId,
+        },
+      },
+      include: {
+        workspace: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException(
+        "You are not a member of this workspace"
+      );
+    }
+
+    // Get or create user settings
+    let settings = await this.prisma.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (!settings) {
+      settings = await this.prisma.userSettings.create({
+        data: {
+          userId,
+          theme: "light",
+          language: "en",
+          timezone: "UTC",
+          notifications: {},
+          defaultWorkspaceId: workspaceId,
+        },
+      });
+    } else {
+      settings = await this.prisma.userSettings.update({
+        where: { userId },
+        data: { defaultWorkspaceId: workspaceId },
+      });
+    }
+
+    // Audit log
+    await this.auditService.record(
+      { ...ctx, workspaceId },
+      {
+        action: "user.default_workspace.updated",
+        entityType: "user_settings",
+        entityId: userId,
+        metadata: {
+          workspaceId,
+          workspaceName: membership.workspace.name,
+        },
+      }
+    );
+
+    return {
+      defaultWorkspaceId: settings.defaultWorkspaceId,
+      workspace: {
+        id: membership.workspace.id,
+        name: membership.workspace.name,
+      },
+    };
+  }
 }

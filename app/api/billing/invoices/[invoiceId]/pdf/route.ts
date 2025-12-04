@@ -1,0 +1,42 @@
+import { getAuthContext } from "@/lib/auth-context";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ invoiceId: string }> }
+) {
+  try {
+    const ctx = await getAuthContext();
+    const { invoiceId } = await params;
+
+    const res = await fetch(`${BACKEND_URL}/billing/invoices/${invoiceId}/pdf`, {
+      headers: {
+        "x-user-id": ctx.userId,
+        "x-workspace-id": ctx.workspaceId,
+        "x-role": ctx.membership.role,
+      },
+    });
+
+    // Stream the PDF response
+    const contentType = res.headers.get("content-type");
+    const contentDisposition = res.headers.get("content-disposition");
+
+    const headers = new Headers();
+    if (contentType) headers.set("Content-Type", contentType);
+    if (contentDisposition) headers.set("Content-Disposition", contentDisposition);
+
+    return new Response(res.body, {
+      status: res.status,
+      headers,
+    });
+  } catch (err: any) {
+    if (err.message === "Unauthorized" || err.message === "User not found in database") {
+      return new Response(err.message, { status: 401 });
+    }
+    if (err.message.startsWith("Forbidden")) {
+      return new Response(err.message, { status: 403 });
+    }
+    return new Response(err.message || "Internal server error", { status: 500 });
+  }
+}

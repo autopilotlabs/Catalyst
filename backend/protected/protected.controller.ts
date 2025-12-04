@@ -12,7 +12,7 @@ export class ProtectedController {
       success: true,
       userId: ctx.userId,
       workspaceId: ctx.workspaceId,
-      role: ctx.role,
+      role: ctx.membership.role,
     };
   }
 }

@@ -225,7 +225,7 @@ export class StripeService {
 
     // Audit log (system context)
     await this.auditService.record(
-      { userId: "system", workspaceId, role: "system" } as AuthContextData,
+      { userId: "system", workspaceId, membership: { role: "owner" } } as AuthContextData,
       {
         action: "billing.subscription.updated",
         entityType: "workspace",
@@ -258,7 +258,7 @@ export class StripeService {
 
     // Audit log (system context)
     await this.auditService.record(
-      { userId: "system", workspaceId, role: "system" } as AuthContextData,
+      { userId: "system", workspaceId, membership: { role: "owner" } } as AuthContextData,
       {
         action: "billing.subscription.deleted",
         entityType: "workspace",
@@ -293,7 +293,7 @@ export class StripeService {
     if (subscription) {
       // Audit log (system context)
       await this.auditService.record(
-        { userId: "system", workspaceId: subscription.workspaceId, role: "system" } as AuthContextData,
+        { userId: "system", workspaceId: subscription.workspaceId, membership: { role: "owner" } } as AuthContextData,
         {
           action: "billing.payment.failed",
           entityType: "workspace",

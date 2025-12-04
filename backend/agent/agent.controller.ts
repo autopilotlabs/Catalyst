@@ -3,23 +3,29 @@ import { Response } from "express";
 import { AgentService } from "./agent.service";
 import { AgentExecutionService } from "./agent-execution.service";
 import { ToolRegistryService } from "./tools/tool-registry.service";
+import { JobQueueService } from "../jobs/job-queue.service";
 import { AuthContext } from "../context/auth-context.decorator";
 import { AuthContextGuard } from "../context/auth-context.guard";
 import { PermissionsGuard } from "../guards/permissions.guard";
+import { RateLimitGuard } from "../guards/rate-limit.guard";
 import { RequirePermission } from "../auth/permissions.decorator";
+import { RateLimit } from "../rate-limit/rate-limit.decorator";
+import { RATE_KEY_AGENT_RUN, RATE_KEY_AGENT_STREAM } from "../rate-limit/rate-limit.service";
 import { AuthContextData } from "../context/auth-context.interface";
 
 @Controller("agent")
-@UseGuards(AuthContextGuard, PermissionsGuard)
+@UseGuards(AuthContextGuard, PermissionsGuard, RateLimitGuard)
 @RequirePermission("workspace.agents")
 export class AgentController {
   constructor(
     private readonly agentService: AgentService,
     private readonly agentExecutionService: AgentExecutionService,
-    private readonly toolRegistry: ToolRegistryService
+    private readonly toolRegistry: ToolRegistryService,
+    private readonly jobQueue: JobQueueService
   ) {}
 
   @Post("run")
+  @RateLimit(RATE_KEY_AGENT_RUN, 60)
   async createRun(
     @AuthContext() ctx: AuthContextData,
     @Body() body: { input: any; agentId?: string }
@@ -34,6 +40,7 @@ export class AgentController {
   }
 
   @Post("execute")
+  @RateLimit(RATE_KEY_AGENT_RUN, 60)
   async executeRun(
     @AuthContext() ctx: AuthContextData,
     @Body() body: { runId: string }
@@ -50,6 +57,7 @@ export class AgentController {
   }
 
   @Get("stream/:runId")
+  @RateLimit(RATE_KEY_AGENT_STREAM, 30)
   async streamRun(
     @Param("runId") runId: string,
     @AuthContext() ctx: AuthContextData,
@@ -83,17 +91,30 @@ export class AgentController {
   }
 
   @Post("run-multi")
+  @RateLimit(RATE_KEY_AGENT_RUN, 60)
   async runMulti(
     @AuthContext() ctx: AuthContextData,
     @Body() body: { input: any; agentId?: string }
   ) {
     const run = await this.agentService.createRun(ctx, body.input, body.agentId);
-    const result = await this.agentExecutionService.multiStepRun(ctx, run.id);
+
+    // Enqueue job for background execution
+    const jobId = await this.jobQueue.enqueue(
+      "agent.run",
+      {
+        runId: run.id,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        role: ctx.membership.role,
+      },
+      ctx.workspaceId
+    );
 
     return {
       success: true,
       runId: run.id,
-      output: result,
+      jobId,
+      status: "queued",
     };
   }
 }

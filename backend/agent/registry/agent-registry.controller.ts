@@ -2,12 +2,13 @@ import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards } from "@n
 import { AuthContext } from "../../context/auth-context.decorator";
 import { AuthContextGuard } from "../../context/auth-context.guard";
 import { PermissionsGuard } from "../../guards/permissions.guard";
+import { WorkspaceLimitGuard, CheckLimit } from "../../guards/workspace-limit.guard";
 import { RequirePermission } from "../../auth/permissions.decorator";
 import { AuthContextData } from "../../context/auth-context.interface";
 import { AgentRegistryService } from "./agent-registry.service";
 
 @Controller("agent/config")
-@UseGuards(AuthContextGuard, PermissionsGuard)
+@UseGuards(AuthContextGuard, PermissionsGuard, WorkspaceLimitGuard)
 export class AgentRegistryController {
   constructor(private readonly registry: AgentRegistryService) {}
 
@@ -25,6 +26,7 @@ export class AgentRegistryController {
 
   @Post()
   @RequirePermission("workspace.agents")
+  @CheckLimit("agents")
   async create(@Body() data: any, @AuthContext() ctx: AuthContextData) {
     return this.registry.createAgent(ctx.workspaceId, data);
   }

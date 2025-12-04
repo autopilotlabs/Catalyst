@@ -12,13 +12,17 @@ import {
 import { AuthContext } from "../context/auth-context.decorator";
 import { AuthContextGuard } from "../context/auth-context.guard";
 import { PermissionsGuard } from "../guards/permissions.guard";
+import { RateLimitGuard } from "../guards/rate-limit.guard";
+import { WorkspaceLimitGuard, CheckLimit } from "../guards/workspace-limit.guard";
 import { RequirePermission } from "../auth/permissions.decorator";
+import { RateLimit } from "../rate-limit/rate-limit.decorator";
+import { RATE_KEY_EVENT_TRIGGER } from "../rate-limit/rate-limit.service";
 import { SearchIndexService } from "../search/search-index.service";
 import { AuthContextData } from "../context/auth-context.interface";
 import { PrismaService } from "../prisma/prisma.service";
 
 @Controller("events/triggers")
-@UseGuards(AuthContextGuard, PermissionsGuard)
+@UseGuards(AuthContextGuard, PermissionsGuard, RateLimitGuard, WorkspaceLimitGuard)
 export class EventTriggerController {
   constructor(
     private readonly prisma: PrismaService,
@@ -87,6 +91,8 @@ export class EventTriggerController {
 
   @Post()
   @RequirePermission("workspace.triggers")
+  @RateLimit(RATE_KEY_EVENT_TRIGGER, 60)
+  @CheckLimit("triggers")
   async create(@AuthContext() ctx: AuthContextData, @Body() data: any) {
     // Validate that the agent exists and belongs to the workspace
     const agent = await this.prisma.agentConfig.findFirst({

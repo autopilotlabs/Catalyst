@@ -1,7 +1,8 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger, Inject, forwardRef, Optional } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthContextData } from "../context/auth-context.interface";
+import { RealtimeService } from "../realtime/realtime.service";
 
 export interface SendNotificationOptions {
   workspaceId: string;
@@ -19,7 +20,10 @@ export class NotificationsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly auditService: AuditService
+    private readonly auditService: AuditService,
+    @Optional()
+    @Inject(forwardRef(() => RealtimeService))
+    private readonly realtimeService?: RealtimeService
   ) {}
 
   /**
@@ -44,7 +48,7 @@ export class NotificationsService {
       }
 
       // Create notification record
-      await this.prisma.notification.create({
+      const notification = await this.prisma.notification.create({
         data: {
           workspaceId,
           userId,
@@ -61,9 +65,12 @@ export class NotificationsService {
         `In-app notification sent to user ${userId}: ${title}`
       );
 
+      // Broadcast realtime event
+      await this.broadcastNotification(workspaceId, userId, notification);
+
       // Audit log
       await this.auditService.record(
-        { userId, workspaceId, role: "system" } as AuthContextData,
+        { userId, workspaceId, membership: { role: "owner" } } as AuthContextData,
         {
           action: "notification.sent",
           entityType: "notification",
@@ -139,7 +146,7 @@ export class NotificationsService {
 
       // Audit log
       await this.auditService.record(
-        { userId, workspaceId, role: "system" } as AuthContextData,
+        { userId, workspaceId, membership: { role: "owner" } } as AuthContextData,
         {
           action: "notification.sent",
           entityType: "notification",
@@ -238,7 +245,7 @@ export class NotificationsService {
 
       // Audit log
       await this.auditService.record(
-        { userId: settings.userId, workspaceId, role: "system" } as AuthContextData,
+        { userId: settings.userId, workspaceId, membership: { role: "owner" } } as AuthContextData,
         {
           action: "notification.sent",
           entityType: "notification",
@@ -258,7 +265,7 @@ export class NotificationsService {
 
       // Log webhook failure
       await this.auditService.record(
-        { userId: "system", workspaceId, role: "system" } as AuthContextData,
+        { userId: "system", workspaceId, membership: { role: "owner" } } as AuthContextData,
         {
           action: "notification.webhook.failed",
           entityType: "notification",
@@ -472,7 +479,7 @@ export class NotificationsService {
 
     // Audit log
     await this.auditService.record(
-      { userId, workspaceId, role: "user" } as AuthContextData,
+      { userId, workspaceId, membership: { role: "member" } } as AuthContextData,
       {
         action: "notification.settings.updated",
         entityType: "settings",
@@ -498,5 +505,54 @@ export class NotificationsService {
         read: false,
       },
     });
+  }
+
+  /**
+   * Broadcast notification via realtime
+   */
+  private async broadcastNotification(
+    workspaceId: string,
+    userId: string,
+    notification: any
+  ): Promise<void> {
+    try {
+      if (this.realtimeService) {
+        this.realtimeService.broadcast(workspaceId, "notification.new", {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          data: notification.data,
+          read: notification.read,
+          createdAt: notification.createdAt,
+        });
+
+        // Also send to specific user
+        this.realtimeService.broadcastToUser(userId, "notification.new", {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          data: notification.data,
+          read: notification.read,
+          createdAt: notification.createdAt,
+        });
+      }
+    } catch (error) {
+      // Silently fail realtime broadcast
+      this.logger.debug(`Failed to broadcast notification: ${error}`);
+    }
+  }
+
+  /**
+   * Run job handler for background queue - webhook delivery
+   */
+  async runWebhookJob(job: any, payload: any): Promise<void> {
+    this.logger.log(`Executing webhook delivery job: ${job.id}`);
+
+    const { workspaceId, type, title, message, data } = payload;
+
+    // Send webhook
+    await this.sendWebhook(workspaceId, type, title, message, data);
   }
 }

@@ -19,7 +19,7 @@ export class PluginExecutorService {
         ctx: {
           userId: ctx.userId,
           workspaceId: ctx.workspaceId,
-          role: ctx.role,
+          role: ctx.membership.role,
         },
         runtime: PluginRuntime,
         console: {

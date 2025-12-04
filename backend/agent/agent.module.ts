@@ -4,6 +4,7 @@ import { AgentService } from "./agent.service";
 import { AgentExecutionService } from "./agent-execution.service";
 import { OpenAIModule } from "../openai/openai.module";
 import { MemoryModule } from "./memory/memory.module";
+import { RateLimitModule } from "../rate-limit/rate-limit.module";
 import { ToolRegistryService } from "./tools/tool-registry.service";
 import { DatabaseQueryTool } from "./tools/database-query.tool";
 import { WebSearchTool } from "./tools/web-search.tool";
@@ -17,9 +18,20 @@ import { PluginExecutorService } from "./plugins/plugin-executor.service";
 import { PluginController } from "./plugins/plugin.controller";
 import { PluginToolController } from "./plugins/plugin-tool.controller";
 import { AuditModule } from "../audit/audit.module";
+import { BillingModule } from "../billing/billing.module";
+import { EnvModule } from "../env/env.module";
 
 @Module({
-  imports: [OpenAIModule, MemoryModule, forwardRef(() => AuditModule)],
+  imports: [
+    OpenAIModule,
+    MemoryModule,
+    RateLimitModule,
+    forwardRef(() => AuditModule),
+    forwardRef(() => BillingModule),
+    forwardRef(() => EnvModule),
+    forwardRef(() => require('../jobs/job.module').JobModule),
+    forwardRef(() => require('../observability/observability.module').ObservabilityModule),
+  ],
   controllers: [
     AgentController,
     StateController,

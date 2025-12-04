@@ -11,13 +11,16 @@ import {
 } from "@nestjs/common";
 import { NotificationsService } from "./notifications.service";
 import { AuthContextGuard } from "../context/auth-context.guard";
+import { RateLimitGuard } from "../guards/rate-limit.guard";
 import { AuthContext } from "../context/auth-context.decorator";
+import { RateLimit } from "../rate-limit/rate-limit.decorator";
+import { RATE_KEY_NOTIFICATION } from "../rate-limit/rate-limit.service";
 import { AuthContextData } from "../context/auth-context.interface";
 import { PermissionsGuard } from "../guards/permissions.guard";
 import { RequirePermission } from "../auth/permissions.decorator";
 
 @Controller("notifications")
-@UseGuards(AuthContextGuard)
+@UseGuards(AuthContextGuard, RateLimitGuard)
 export class NotificationsController {
   constructor(
     private readonly notificationsService: NotificationsService
@@ -28,6 +31,7 @@ export class NotificationsController {
    * List in-app notifications for the authenticated user
    */
   @Get()
+  @RateLimit(RATE_KEY_NOTIFICATION, 100)
   async listNotifications(
     @AuthContext() ctx: AuthContextData,
     @Query("unread") unread?: string,

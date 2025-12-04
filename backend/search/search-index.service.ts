@@ -233,4 +233,16 @@ export class SearchIndexService {
     // Return beginning of content
     return content.substring(0, maxLength).trim() + (content.length > maxLength ? "..." : "");
   }
+
+  /**
+   * Run job handler for background queue - async indexing
+   */
+  async runJob(job: any, payload: any): Promise<void> {
+    this.logger.log(`Executing search index job: ${job.id}`);
+
+    const { workspaceId, entityType, entityId, content } = payload;
+
+    // Index the entity
+    await this.indexEntity(workspaceId, entityType, entityId, content);
+  }
 }

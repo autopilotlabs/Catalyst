@@ -8,8 +8,11 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { ChevronDown } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ChevronDown, Check } from "lucide-react"
+import { toast } from "sonner"
 
 interface Workspace {
   id: string
@@ -38,6 +41,7 @@ export function WorkspaceSelector() {
   const [switching, setSwitching] = useState(false)
 
   useEffect(() => {
+    // Fetch user info and workspaces
     fetch("/api/me")
       .then((res) => {
         if (!res.ok) throw new Error("Failed to fetch")
@@ -45,13 +49,27 @@ export function WorkspaceSelector() {
       })
       .then((data: MeResponse) => {
         setData(data)
-        // Default to first workspace if no active workspace
-        if (data.workspaces.length > 0 && !currentWorkspaceId) {
-          setCurrentWorkspaceId(data.workspaces[0].id)
-        }
+        
+        // Try to get the active workspace from settings
+        return fetch("/api/user/settings/workspace")
+          .then((res) => res.ok ? res.json() : null)
+          .then((settings) => {
+            if (settings?.data?.defaultWorkspaceId) {
+              setCurrentWorkspaceId(settings.data.defaultWorkspaceId)
+            } else if (data.workspaces.length > 0) {
+              setCurrentWorkspaceId(data.workspaces[0].id)
+            }
+          })
+          .catch(() => {
+            // Fallback to first workspace if settings fetch fails
+            if (data.workspaces.length > 0) {
+              setCurrentWorkspaceId(data.workspaces[0].id)
+            }
+          })
       })
       .catch((err) => {
         console.error("Failed to load workspaces:", err)
+        toast.error("Failed to load workspaces")
       })
       .finally(() => {
         setLoading(false)
@@ -59,7 +77,7 @@ export function WorkspaceSelector() {
   }, [])
 
   const handleSwitchWorkspace = async (workspaceId: string) => {
-    if (switching) return
+    if (switching || workspaceId === currentWorkspaceId) return
     
     setSwitching(true)
     try {
@@ -75,11 +93,16 @@ export function WorkspaceSelector() {
         throw new Error("Failed to switch workspace")
       }
 
+      const workspace = data?.workspaces.find((w) => w.id === workspaceId)
+      toast.success(`Switched to ${workspace?.name || "workspace"}`)
+      
       setCurrentWorkspaceId(workspaceId)
-      router.refresh()
-      router.push("/")
+      
+      // Reload page to refresh all data
+      window.location.reload()
     } catch (err) {
       console.error("Failed to switch workspace:", err)
+      toast.error("Failed to switch workspace")
     } finally {
       setSwitching(false)
     }
@@ -107,19 +130,34 @@ export function WorkspaceSelector() {
           <ChevronDown className="ml-2 h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        {data.workspaces.map((workspace) => (
-          <DropdownMenuItem
-            key={workspace.id}
-            onClick={() => handleSwitchWorkspace(workspace.id)}
-            className="cursor-pointer"
-          >
-            <div className="flex flex-col">
-              <span className="font-medium">{workspace.name}</span>
-              <span className="text-xs text-muted-foreground">{workspace.role}</span>
-            </div>
-          </DropdownMenuItem>
-        ))}
+      <DropdownMenuContent align="end" className="w-64">
+        <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">
+          Your Workspaces
+        </div>
+        <DropdownMenuSeparator />
+        {data.workspaces.map((workspace) => {
+          const isActive = workspace.id === currentWorkspaceId
+          return (
+            <DropdownMenuItem
+              key={workspace.id}
+              onClick={() => handleSwitchWorkspace(workspace.id)}
+              className="cursor-pointer"
+              disabled={isActive}
+            >
+              <div className="flex items-center justify-between w-full">
+                <div className="flex flex-col">
+                  <span className="font-medium">{workspace.name}</span>
+                  <span className="text-xs text-muted-foreground capitalize">
+                    {workspace.role}
+                  </span>
+                </div>
+                {isActive && (
+                  <Check className="h-4 w-4 text-primary" />
+                )}
+              </div>
+            </DropdownMenuItem>
+          )
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   )

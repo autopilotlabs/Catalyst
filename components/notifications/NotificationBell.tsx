@@ -2,7 +2,9 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { formatDistanceToNow } from "date-fns";
+import { getRealtimeClient, subscribeToEvent } from "@/lib/realtime-client";
 
 interface Notification {
   id: string;
@@ -16,6 +18,7 @@ interface Notification {
 
 export function NotificationBell() {
   const router = useRouter();
+  const { user } = useUser();
   const [isOpen, setIsOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -23,10 +26,31 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchUnreadCount();
-    // Poll for new notifications every 30 seconds
-    const interval = setInterval(fetchUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
+
+    // Setup WebSocket connection for realtime notifications
+    if (user?.id) {
+      const workspaceId = localStorage.getItem("activeWorkspaceId") || "";
+      const role = localStorage.getItem("workspaceRole") || "member";
+
+      if (workspaceId) {
+        try {
+          const socket = getRealtimeClient(workspaceId, user.id, role);
+
+          // Subscribe to notification events
+          const unsubscribe = subscribeToEvent("notification.new", (data) => {
+            console.log("[NotificationBell] New notification received:", data);
+            fetchUnreadCount();
+          });
+
+          return () => {
+            unsubscribe();
+          };
+        } catch (error) {
+          console.error("[NotificationBell] Failed to setup realtime:", error);
+        }
+      }
+    }
+  }, [user?.id]);
 
   const fetchUnreadCount = async () => {
     try {

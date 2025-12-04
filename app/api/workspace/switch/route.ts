@@ -33,7 +33,21 @@ export async function POST(req: Request) {
     })
   }
 
-  // Set the cookie
+  // Update the user's default workspace in the database
+  await prisma.userSettings.upsert({
+    where: { userId },
+    update: { defaultWorkspaceId: workspaceId },
+    create: {
+      userId,
+      theme: "light",
+      language: "en",
+      timezone: "UTC",
+      notifications: {},
+      defaultWorkspaceId: workspaceId,
+    },
+  })
+
+  // Also set the cookie for immediate effect
   const cookieStore = await cookies()
   cookieStore.set("activeWorkspaceId", workspaceId, {
     httpOnly: true,

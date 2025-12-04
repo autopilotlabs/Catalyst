@@ -1,0 +1,33 @@
+import { NextResponse } from "next/server";
+import { getAuthContext } from "@/lib/auth-context";
+
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:3001";
+
+export async function GET(
+  req: Request,
+  { params }: { params: Promise<{ invoiceId: string }> }
+) {
+  try {
+    const ctx = await getAuthContext();
+    const { invoiceId } = await params;
+
+    const res = await fetch(`${BACKEND_URL}/billing/invoices/${invoiceId}`, {
+      headers: {
+        "x-user-id": ctx.userId,
+        "x-workspace-id": ctx.workspaceId,
+        "x-role": ctx.membership.role,
+      },
+    });
+
+    const data = await res.json();
+    return NextResponse.json(data, { status: res.status });
+  } catch (err: any) {
+    if (err.message === "Unauthorized" || err.message === "User not found in database") {
+      return new Response(err.message, { status: 401 });
+    }
+    if (err.message.startsWith("Forbidden")) {
+      return new Response(err.message, { status: 403 });
+    }
+    return new Response(err.message || "Internal server error", { status: 500 });
+  }
+}

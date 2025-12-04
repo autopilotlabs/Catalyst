@@ -103,7 +103,7 @@ export class MembersController {
     }
 
     // Prevent non-owners from promoting to owner
-    if (newRole === "owner" && ctx.role !== "owner") {
+    if (newRole === "owner" && ctx.membership.role !== "owner") {
       throw new ForbiddenException("Only owners can promote members to owner");
     }
 

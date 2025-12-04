@@ -1,14 +1,16 @@
-import { Module, forwardRef } from "@nestjs/common";
+import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
-import { AuditModule } from "../audit/audit.module";
-import { StripeService } from "./stripe.service";
+import { BillingService } from "./billing.service";
+import { InvoiceService } from "./invoice.service";
 import { BillingController } from "./billing.controller";
-import { StripeWebhookController } from "./stripe-webhook.controller";
 
 @Module({
-  imports: [PrismaModule, forwardRef(() => AuditModule)],
-  providers: [StripeService],
-  controllers: [BillingController, StripeWebhookController],
-  exports: [StripeService],
+  imports: [
+    PrismaModule,
+    require('../observability/observability.module').ObservabilityModule,
+  ],
+  providers: [BillingService, InvoiceService],
+  controllers: [BillingController],
+  exports: [BillingService, InvoiceService],
 })
 export class BillingModule {}
